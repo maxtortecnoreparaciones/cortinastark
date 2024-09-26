@@ -1,0 +1,68 @@
+#include <WiFi.h>
+#include <WebServer.h>
+#include <ESP32Servo.h>  // Usar la biblioteca ESP32Servo
+
+// Reemplaza con tus credenciales de WiFi
+const char* ssid = "RUTADEVIAJE";
+const char* password = "Sistemalion206424";
+
+// Configuración de IP estática
+IPAddress local_IP(192, 168, 1, 99); // IP fija que deseas asignar
+IPAddress gateway(192, 168, 1, 1);     // Puerta de enlace
+IPAddress subnet(255, 255, 255, 0);    // Máscara de subred
+
+WebServer server(80);
+const int ldrPin = 34;  // Pin del sensor LDR
+const int servoPin = 25; // Pin del servo motor
+
+ESP32Servo myServo; // Usar la biblioteca ESP32Servo
+
+void setup() {
+  Serial.begin(115200);
+  myServo.attach(servoPin); // Conectar el servo motor
+
+  // Conectar a WiFi con IP fija
+  if (!WiFi.config(local_IP, gateway, subnet)) {
+    Serial.println("Fallo al configurar la IP estática");
+  }
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.println("Conectando a WiFi...");
+  }
+  Serial.println("Conectado a WiFi");
+  Serial.print("Dirección IP: ");
+  Serial.println(WiFi.localIP());
+
+  // Inicializar el servo en 0 grados
+  myServo.write(0);
+  delay(500); // Esperar medio segundo para estabilizar
+}
+
+void loop() {
+  server.handleClient();
+
+  // Leer la luz del sensor LDR
+  int ldrValue = analogRead(ldrPin);
+  Serial.print("Luz: ");
+  Serial.println(ldrValue);
+
+  // Controlar el servo motor basado en el nivel de luz
+  if (ldrValue < 500) { // Ajusta este umbral según tus necesidades
+    myServo.write(90); // Mover a posición 90 grados si hay luz
+  } else {
+    myServo.write(0); // Regresar a posición 0 grados si no hay luz
+  }
+
+  delay(1000); // Esperar 1 segundo antes de la próxima lectura
+}
+
+void handleRoot() {
+  String html = "<html><head><title>Control Servo</title>";
+  html += "<style>body { font-family: Arial, sans-serif; text-align: center; background-color: #f4f4f4; }";
+  html += "h1 { color: #333; }</style></head><body>";
+  html += "<h1>Control Servo Motor</h1>";
+  html += "<p>El servo se moverá según el nivel de luz.</p>";
+  html += "</body></html>";
+  server.send(200, "text/html", html);
+}
