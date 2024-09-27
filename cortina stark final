@@ -41,10 +41,17 @@ void setup() {
 void loop() {
   server.handleClient();
 
+  // >>>> validar si esta automatico o manual y seguir el flujo q requiera validar
+
+
+
   // Leer la luz del sensor LDR
   int ldrValue = analogRead(ldrPin);
   Serial.print("Luz: ");
   Serial.println(ldrValue);
+
+
+  // >>>> la validación en base a posición de la cortina y si hay luz
 
   // Leer el estado del sensor de línea
   int lineSensorValue = digitalRead(lineSensorPin);
@@ -61,12 +68,14 @@ void loop() {
     stopMotor(); // Detener el motor si no está sobre la línea
   }
 
+
   delay(1000); // Esperar un segundo antes de la próxima lectura
 }
 
 void runMotorLeft() {
   digitalWrite(motorPin1, HIGH); // Motor en sentido horario
   digitalWrite(motorPin2, LOW);
+  // >>>> validar si esta en linea mientras esta en movimiento
   delay(5000); // Mantener movimiento por 5 segundos
   stopMotor(); // Detener el motor
 }
@@ -74,6 +83,7 @@ void runMotorLeft() {
 void runMotorRight() {
   digitalWrite(motorPin1, LOW); // Motor en sentido antihorario
   digitalWrite(motorPin2, HIGH);
+  // >>>> validar si esta en linea mientras esta en movimiento
   delay(5000); // Mantener movimiento por 5 segundos
   stopMotor(); // Detener el motor
 }
