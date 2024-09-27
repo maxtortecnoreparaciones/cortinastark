@@ -1,0 +1,84 @@
+#include <WiFi.h>
+#include <WebServer.h>
+
+
+// Reemplaza con tus credenciales de WiFi
+const char* ssid = "RUTADEVIAJE";
+const char* password = "Sistemalion206424";
+
+// Configuración de IP estática
+IPAddress local_IP(192, 168, 1, 99); // IP fija que deseas asignar
+IPAddress gateway(192, 168, 1, 1);     // Puerta de enlace
+IPAddress subnet(255, 255, 255, 0);    // Máscara de subred
+
+WebServer server(80);
+const int ldrPin = 34;  // Pin del sensor LDR
+const int motorPin1 = 25; // Pin para el motor en sentido horario
+const int motorPin2 = 26; // Pin para el motor en sentido antihorario
+const int lineSensorPin = 27; // Pin para el sensor HW-870
+
+void setup() {
+  Serial.begin(115200);
+  
+  pinMode(motorPin1, OUTPUT);
+  pinMode(motorPin2, OUTPUT);
+  pinMode(lineSensorPin, INPUT); // Configurar el sensor de línea como entrada
+
+  // Conectar a WiFi con IP fija
+  if (!WiFi.config(local_IP, gateway, subnet)) {
+    Serial.println("Fallo al configurar la IP estática");
+  }
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.println("Conectando a WiFi...");
+  }
+  Serial.println("Conectado a WiFi");
+  Serial.print("Dirección IP: ");
+  Serial.println(WiFi.localIP());
+}
+
+void loop() {
+  server.handleClient();
+
+  // Leer la luz del sensor LDR
+  int ldrValue = analogRead(ldrPin);
+  Serial.print("Luz: ");
+  Serial.println(ldrValue);
+
+  // Leer el estado del sensor de línea
+  int lineSensorValue = digitalRead(lineSensorPin);
+  Serial.print("Sensor de línea: ");
+  Serial.println(lineSensorValue);
+
+  if (lineSensorValue == LOW) { // Si se detecta la línea
+    if (ldrValue < 500) { // Si hay oscuridad
+      runMotorLeft(); // Correr a la izquierda
+    } else {
+      runMotorRight(); // Correr a la derecha
+    }
+  } else {
+    stopMotor(); // Detener el motor si no está sobre la línea
+  }
+
+  delay(1000); // Esperar un segundo antes de la próxima lectura
+}
+
+void runMotorLeft() {
+  digitalWrite(motorPin1, HIGH); // Motor en sentido horario
+  digitalWrite(motorPin2, LOW);
+  delay(5000); // Mantener movimiento por 5 segundos
+  stopMotor(); // Detener el motor
+}
+
+void runMotorRight() {
+  digitalWrite(motorPin1, LOW); // Motor en sentido antihorario
+  digitalWrite(motorPin2, HIGH);
+  delay(5000); // Mantener movimiento por 5 segundos
+  stopMotor(); // Detener el motor
+}
+
+void stopMotor() {
+  digitalWrite(motorPin1, LOW);
+  digitalWrite(motorPin2, LOW);
+}
