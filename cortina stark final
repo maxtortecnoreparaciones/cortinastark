@@ -160,3 +160,7 @@ void stopMotor() {
   digitalWrite(motorPin1, LOW);
   digitalWrite(motorPin2, LOW);
 }
+
+
+//función stopMotor Duplicada
+//¿q pasa si es de día y bajo la cortina?
