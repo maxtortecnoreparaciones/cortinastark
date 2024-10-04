@@ -64,30 +64,26 @@ void loop() {
     Serial.println(lineSensorValue);
 
     if (lineSensorValue == LOW) { // Si se detecta la línea
-      if (persianaEstado == 1) { // Si la persiana está arriba
-        if (ldrValue < 500) { // Si hay oscuridad
-          runMotorLeft(); // Correr a la izquierda (bajar)
-        }
-      } else { // Si la persiana está abajo
+      // Verificar el estado de la persiana y la luz
+      if ((persianaEstado == 1 && ldrValue < 500)) { // Persiana arriba y oscuridad
+        runMotorLeft(); // Correr a la izquierda (bajar)
+      } else if (persianaEstado == 0 && ldrValue >= 500) { // Persiana abajo y luz
         runMotorRight(); // Correr a la derecha (subir)
       }
-    } else {
-      stopMotor(); // Detener el motor si no está sobre la línea
-    }
+    } 
   }
   delay(100); // Esperar un corto periodo antes de la próxima lectura
 }
-
 void runMotorLeft() {
   digitalWrite(motorPin1, HIGH); // Motor en sentido horario
   digitalWrite(motorPin2, LOW);
   
-  unsigned long startTime = millis(); // Guardar el tiempo de inicio
 
-  while (millis() - startTime < velocidadMotor) { // Mantener el motor encendido por un tiempo específico
+
+  while (true) { // Mantener el motor encendido por un tiempo específico
     if (digitalRead(lineSensorPin) == HIGH) { // Si el sensor de línea no está activo
       stopMotor(); // Detener el motor
-      break; // Salir del bucle
+      
     }
   }
 
@@ -99,12 +95,12 @@ void runMotorRight() {
   digitalWrite(motorPin1, LOW); // Motor en sentido antihorario
   digitalWrite(motorPin2, HIGH);
   
-  unsigned long startTime = millis(); // Guardar el tiempo de inicio
+ 
 
-  while (millis() - startTime < velocidadMotor) { // Mantener el motor encendido por un tiempo específico
+  while (true) { // Mantener el motor encendido por un tiempo específico
     if (digitalRead(lineSensorPin) == HIGH) { // Si el sensor de línea no está activo
       stopMotor(); // Detener el motor
-      break; // Salir del bucle
+      
     }
   }
 
