@@ -1,159 +1,203 @@
- #include <WiFi.h>
-#include <WebServer.h>
-
-// Reemplaza con tus credenciales de WiFi
-const char* ssid = "RUTADEVIAJE";
-const char* password = "Sistemalion206424";
-
-// Configuración de IP estática
-IPAddress local_IP(192, 168, 1, 99); // IP fija que deseas asignar
-IPAddress gateway(192, 168, 1, 1);     // Puerta de enlace
-IPAddress subnet(255, 255, 255, 0);    // Máscara de subred
-
-WebServer server(8080);
-const int ldrPin = 34;  // Pin del sensor LDR
-const int motorPin1 = 25; // Pin para el motor en sentido horario
-const int motorPin2 = 26; // Pin para el motor en sentido antihorario
-const int lineSensorPin = 27; // Pin para el sensor HW-870
-
-// Variables globales
-int persianaEstado = 0; // 0: abajo, 1: arriba
-bool modoAutomatico = true; // true: automático, false: manual
-int velocidadMotor = 2000; // Velocidad por defecto (en milisegundos)
-
-void setup() {
-  Serial.begin(115200);
+#include <WiFi.h>
+  #include <WebServer.h>
   
-  pinMode(motorPin1, OUTPUT);
-  pinMode(motorPin2, OUTPUT);
-  pinMode(lineSensorPin, INPUT); // Configurar el sensor de línea como entrada
-
-  // Conectar a WiFi con IP fija
-  if (!WiFi.config(local_IP, gateway, subnet)) {
-    Serial.println("Fallo al configurar la IP estática");
-  }
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(1000);
-    Serial.println("Conectando a WiFi...");
+  // Reemplaza con tus credenciales de WiFi
+  const char* ssid = "RUTADEVIAJE";
+  const char* password = "Sistemalion206424";
+  
+  // Configuración de IP estática
+  IPAddress local_IP(192, 168, 1, 99);
+  IPAddress gateway(192, 168, 1, 1);   // Puerta de enlace
+  IPAddress subnet(255, 255, 255, 0);  // Máscara de subred
+  
+  WebServer server(8080);
+  const int ldrPin = 34;         // Pin del sensor LDR
+  const int motorPin1 = 25;      // Pin para el motor en sentido horario
+  const int motorPin2 = 26;      // Pin para el motor en sentido antihorario
+  const int lineSensorPin = 27;  // Pin para el sensor HW-870
+  
+  
+  
+  // Variables de estado
+  int movimiento = 0;
+  int persianaEstado;   // 0: abajo, 1: arriba (inicialmente arriba)
+  bool modoAutomatico;  // true: automático, false: manual
+  int velocidadMotor;   // Velocidad por defecto
+  
+  void setup() {
+  
+    Serial.begin(115200);
+  
+    pinMode(motorPin1, OUTPUT);
+    pinMode(motorPin2, OUTPUT);
+    pinMode(lineSensorPin, INPUT);  // Configurar el sensor de línea como entrada
+  
+    // Conectar a WiFi con IP fija
+    if (!WiFi.config(local_IP, gateway, subnet)) {
+      Serial.println("Fallo al configurar la IP estática");
+    }
+    WiFi.begin(ssid, password);
+    while (WiFi.status() != WL_CONNECTED) {
+      delay(1000);
+      Serial.println("Conectando a WiFi...");
+    }
+  
+    delay(1000);  // Espera un segundo antes de iniciar el servidor
+    server.begin();
+    Serial.println("Servidor HTTP iniciado en: ");
+    Serial.print("http://");
+    Serial.print(WiFi.localIP());  // Muestra la dirección IP
+    Serial.println("/");
+  
+    // Definir las rutas del servidor
+    server.on("/", handleRoot);
+    server.on("/runMotorDown", runMotorDownManual);
+    server.on("/runMotorUp", runMotorUpManual);
+    server.on("/setModo", handleSetModo);
+    server.on("/setVelocidad", handleSetVelocidad);
+    server.begin();
+    persianaEstado = 1;
+    modoAutomatico = true;
+    velocidadMotor = 2000;
   }
   
-  delay(1000); // Espera un segundo antes de iniciar el servidor
-  server.begin();
-  Serial.println("Servidor HTTP iniciado en: ");
-  Serial.print("http://");
-  Serial.print(WiFi.localIP()); // Muestra la dirección IP
-  Serial.println("/");
-
-  // Definir las rutas del servidor
-  server.on("/", handleRoot);
-  server.on("/setModo", handleSetModo);
-  server.on("/setVelocidad", handleSetVelocidad);
-  server.begin();
-}
-
-void loop() {
-  server.handleClient();
-
-  // Leer el modo automático y controlar el motor si está activado
-  if (modoAutomatico) {
-    int ldrValue = analogRead(ldrPin);
-    Serial.print("Luz: ");
-    Serial.println(ldrValue);
-
-    // Leer el estado del sensor de línea
+  void loop() {
+    server.handleClient();
+    handleRoot();
+    // Leer el modo automático y controlar el motor si está activado
+    if (modoAutomatico) {
+      int ldrValue = analogRead(ldrPin);
+      Serial.print("Luz: ");
+      Serial.println(ldrValue);
+  
+      // Leer el estado del sensor de línea
+      int lineSensorValue = digitalRead(lineSensorPin);
+      Serial.print("Sensor de línea: ");
+      Serial.println(lineSensorValue);
+  
+  
+      if (lineSensorValue == HIGH) {  // Si se detecta la línea
+        // Verificar el estado de la persiana y la luz
+        if (persianaEstado == 1 && ldrValue < 500) {         // Persiana arriba y oscuridad
+          runMotorDown();                                    // Correr a la izquierda (bajar)
+        } else if (persianaEstado == 0 && ldrValue > 500) {  // Persiana abajo y luz
+          runMotorUp();                                      // Correr a la derecha (subir)
+        }
+      }
+    }
+    delay(100);  // Esperar un breve tiempo antes de la próxima lectura
+  }
+  
+  void runMotorDownManual() {
+    modoAutomatico = 0;
+    runMotorDown();
+  }
+  
+  void runMotorUpManual() {
+    modoAutomatico = 0;
+    runMotorUp();
+  }
+  void runMotorDown() {
+    movements(true);
+    persianaEstado = 0;  // Persiana está abajo
+    handleRoot();
+  }
+  
+  void runMotorUp() {
+    movements(false);
+    persianaEstado = 1;  // Persiana está arriba
+    handleRoot();
+  }
+  
+  void movements(boolean movement) {
+    if (movement) {
+      movimiento = 2;
+      digitalWrite(motorPin1, HIGH);  // Motor bajando
+      digitalWrite(motorPin2, LOW);
+    } else {
+      movimiento = 1;
+      digitalWrite(motorPin1, LOW);  // Motor subiendo
+      digitalWrite(motorPin2, HIGH);
+    }
+    handleRoot();
+  
+    // Mantener el motor en movimiento mientras se detecta la línea
+    while (true) {                              // Mantener el motor encendido por un tiempo específico
+      if (digitalRead(lineSensorPin) == LOW) {  // Si el sensor de línea no está activo
+        stopMotor();                            // Detener el motor
+        movimiento = 0;
+        break;
+      }
+    }
+    handleRoot();
+  }
+  
+  void handleSetModo() {
+    if (server.hasArg("modo")) {
+      modoAutomatico = server.arg("modo") == "1";  // Cambiar el modo
+    }
+    handleRoot();  // Redirigir al manejo de la raíz después de cambiar el modo
+  }
+  
+  void handleSetVelocidad() {
+    if (server.hasArg("velocidad")) {
+      velocidadMotor = server.arg("velocidad").toInt();  // Cambiar la velocidad
+    }
+    handleRoot();  // Redirigir al manejo de la raíz después de cambiar la velocidad
+  }
+  
+  void stopMotor() {
+    digitalWrite(motorPin1, LOW);
+    digitalWrite(motorPin2, LOW);
+  }
+  
+  void handleRoot() {
+    String html = "<!DOCTYPE html><html lang='es'><head>";
+    html += "<meta charset='UTF-8'>";
+    html += "<meta name='viewport' content='width=device-width, initial-scale=1.0'>";
+    html += "<title>Control del Motor</title>";
+    html += "<style>";
+    html += "body { font-family: Arial, sans-serif; text-align: center; background-image: url('https://your-background-image-url.com'); background-size: cover; }";
+    html += "h1 { color: #fff; text-shadow: 2px 2px 4px #000; }";
+    html += "button { padding: 15px 20px; margin: 10px; font-size: 16px; cursor: pointer; border: none; border-radius: 5px; transition: background-color 0.3s, transform 0.3s; }";
+    html += "button:hover { transform: scale(1.05); }";  // Efecto de escalado en el hover
+    html += ".toggle-button { background-color: #28A745; color: white; }";
+    html += ".toggle-button:hover { background-color: #218838; }";
+    html += ".speed-button { background-color: #007BFF; color: white; }";
+    html += ".speed-button:hover { background-color: #0056b3; }";
+    html += "</style></head><body>";
+    html += "<h1>Control del Motor</h1>";
     int lineSensorValue = digitalRead(lineSensorPin);
     Serial.print("Sensor de línea: ");
     Serial.println(lineSensorValue);
-
-    if (lineSensorValue == LOW) { // Si se detecta la línea
-      if (ldrValue < 500) { // Si hay oscuridad
-        runMotorLeft(); // Correr a la izquierda
-      } else {
-        runMotorRight(); // Correr a la derecha
-      }
-    } else {
-      stopMotor(); // Detener el motor si no está sobre la línea
+    html += "<p>En LINEA: " + String(lineSensorValue == HIGH ? "HIGH" : "LOW") + "</p>";
+  
+    html += "<p>Estado del motor: ";
+    if (movimiento == 0) {
+      html += "detenido";
+    } else if (movimiento == 1) {
+      html += "subiendo";
+    } else if (movimiento == 2) {
+      html += "bajando";
     }
-  }
-
-  delay(100); // Esperar un breve tiempo antes de la próxima lectura
-}
-
-void runMotorLeft() {
-  digitalWrite(motorPin1, HIGH); // Motor en sentido horario
-  digitalWrite(motorPin2, LOW);
+    html += "</p>";
   
-  // Mantener el motor en movimiento mientras se detecta la línea
-  while (digitalRead(lineSensorPin) == LOW) {
-    delay(100); // Pequeña espera para evitar sobrecargar el bucle
-  }
-  
-  stopMotor(); // Detener el motor si se pierde la línea
-  persianaEstado = 1; // Persiana está arriba
-}
-
-void runMotorRight() {
-  digitalWrite(motorPin1, LOW); // Motor en sentido antihorario
-  digitalWrite(motorPin2, HIGH);
-  
-  // Mantener el motor en movimiento mientras se detecta la línea
-  while (digitalRead(lineSensorPin) == LOW) {
-    delay(100); // Pequeña espera para evitar sobrecargar el bucle
+    html += "<p>Estado de la persiana: " + String(persianaEstado == 1 ? "Arriba" : "Abajo") + "</p>";
+    // Verificar si es de día o de noche
+    int ldrValue = analogRead(ldrPin);
+    String diaNoche = (ldrValue < 500) ? "Día" : "Noche";
+    html += "<p>Estado de luz: " + diaNoche + "</p>";
+    html += "<p>Modo: " + String(modoAutomatico ? "Automático" : "Manual") + "</p>";
+    html += "<label for='velocidad'>Seleccionar Velocidad:</label>";
+    html += "<select id='velocidad' onchange=\"location.href='/setVelocidad?velocidad=' + this.value\">";
+    html += "<option value='2000'>Normal</option>";
+    html += "<option value='1000'>Rápido</option>";
+    html += "<option value='500'>Lento</option>";
+    html += "</select><br>";
+    html += "<button class='toggle-button' onclick=\"location.href='/runMotorUp'\">Subir</button>";
+    html += "<button class='toggle-button' onclick=\"location.href='/runMotorDown'\">Bajar</button>";
+    html += "<button class='toggle-button' onclick=\"location.href='/setModo?modo=" + String(!modoAutomatico) + "'\">" + String(modoAutomatico ? "Desactivar Modo Automático" : "Activar Modo Automático") + "</button>";
+    html += "</body></html>";
+    server.send(200, "text/html", html);
   }
   
-  stopMotor(); // Detener el motor si se pierde la línea
-  persianaEstado = 0; // Persiana está abajo
-}
-
-void handleSetModo() {
-  if (server.hasArg("modo")) {
-    modoAutomatico = server.arg("modo") == "1"; // Cambiar el modo
-  }
-  handleRoot(); // Redirigir al manejo de la raíz después de cambiar el modo
-}
-
-void handleSetVelocidad() {
-  if (server.hasArg("velocidad")) {
-    velocidadMotor = server.arg("velocidad").toInt(); // Cambiar la velocidad
-  }
-  handleRoot(); // Redirigir al manejo de la raíz después de cambiar la velocidad
-}
-
-void stopMotor() {
-  digitalWrite(motorPin1, LOW);
-  digitalWrite(motorPin2, LOW);
-}
-
-void handleRoot() {
-  String html = "<!DOCTYPE html><html lang='es'><head>";
-  html += "<meta charset='UTF-8'>";
-  html += "<meta name='viewport' content='width=device-width, initial-scale=1.0'>";
-  html += "<title>Control del Motor</title>";
-  html += "<style>";
-  html += "body { font-family: Arial, sans-serif; text-align: center; background-image: url('https://your-background-image-url.com'); background-size: cover; }";
-  html += "h1 { color: #fff; text-shadow: 2px 2px 4px #000; }";
-  html += "button { padding: 15px 20px; margin: 10px; font-size: 16px; cursor: pointer; border: none; border-radius: 5px; transition: background-color 0.3s, transform 0.3s; }";
-  html += "button:hover { transform: scale(1.05); }"; // Efecto de escalado en el hover
-  html += ".toggle-button { background-color: #28A745; color: white; }";
-  html += ".toggle-button:hover { background-color: #218838; }";
-  html += ".speed-button { background-color: #007BFF; color: white; }";
-  html += ".speed-button:hover { background-color: #0056b3; }";
-  html += "</style></head><body>";
-  html += "<h1>Control del Motor</h1>";
-  html += "<p>Estado de la persiana: " + String(persianaEstado == 1 ? "Arriba" : "Abajo") + "</p>";
-  html += "<p>Modo: " + String(modoAutomatico ? "Automático" : "Manual") + "</p>";
-  html += "<label for='velocidad'>Seleccionar Velocidad:</label>";
-  html += "<select id='velocidad' onchange=\"location.href='/setVelocidad?velocidad=' + this.value\">";
-  html += "<option value='2000'>Normal</option>";
-  html += "<option value='1000'>Rápido</option>";
-  html += "<option value='500'>Lento</option>";
-  html += "</select><br>";
-  html += "<button class='toggle-button' onclick=\"location.href='/runMotorLeft'\">Subir</button>";
-  html += "<button class='toggle-button' onclick=\"location.href='/runMotorRight'\">Bajar</button>";
-  html += "<button class='toggle-button' onclick=\"location.href='/setModo?modo=" + String(!modoAutomatico) + "'\">" + String(modoAutomatico ? "Desactivar Modo Automático" : "Activar Modo Automático") + "</button>";
-  html += "</body></html>";
-  server.send(200, "text/html", html);
-}
-
-
